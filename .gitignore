@@ -1,0 +1,59 @@
+# Built by the workflow, never committed.
+/devp2p
+/.core-geth/
+
+# Signing keys never enter this repository. The private half lives only in the
+# DNS_SIGNING_KEY secret; losing it means every client that shipped its public
+# half must be rebuilt.
+*.key
+*.pem
+
+# Machine-local working notes, never published.
+.local/
+
+# ---------------------------------------------------------------------------
+# Agent configuration -- added with AGENTS.md / CLAUDE.md, 2026-08-31.
+# Everything above this line belongs to the publishing pipeline.
+# ---------------------------------------------------------------------------
+
+# CLAUDE.md and AGENTS.md are TRACKED and travel to every clone. Machine-local
+# instructions go here instead, and must never be committed.
+CLAUDE.local.md
+
+# .claude/ is tracked so repo-local agent config reaches a clone. Only local and
+# agent-written state is held back, and that deny-list lives in .claude/.gitignore
+# beside the directory it governs.
+
+# Ad-hoc planning and session notes, in whatever form they arrive.
+# (.local/ is already covered above, by the pipeline block.)
+SESSION_NOTES.md
+PLANNING.md
+SCRATCH.md
+*.scratch.*
+*.draft.*
+
+# Credentials and key material beyond the *.key / *.pem above. The tree-signing
+# key is an Ethereum KEYSTORE JSON, so the keystore patterns are not decorative.
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+id_rsa
+id_ecdsa
+id_ed25519
+credentials.json
+service-account.json
+secrets/
+keystore/
+*.keystore
+wallet.json
+mnemonic.txt
+
+# OS and editor droppings.
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
