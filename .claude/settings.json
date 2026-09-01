@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/update-lists.sh --dry-run:*)",
+      "Bash(bash -n:*)",
+      "Bash(shellcheck:*)",
+      "Bash(jq:*)",
+      "Bash(dig:*)",
+      "Bash(go build:*)",
+      "Bash(go version:*)",
+      "Bash(devp2p --version:*)",
+      "Bash(devp2p dns sync:*)",
+      "Bash(devp2p dns to-txt:*)",
+      "Bash(devp2p nodeset filter:*)",
+      "Bash(devp2p nodeset info:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git show:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(devp2p dns sign:*)",
+      "Bash(devp2p dns to-cloudflare:*)",
+      "Bash(devp2p dns to-route53:*)",
+      "Bash(./scripts/update-lists.sh:*)"
+    ]
+  }
+}

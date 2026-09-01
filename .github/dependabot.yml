@@ -1,0 +1,49 @@
+# Dependency updates for discv4-dns-lists.
+#
+# VERSION UPDATES ARE OFF, DELIBERATELY. Decided 2026-08-31.
+#
+# `open-pull-requests-limit: 0` is GitHub's documented mechanism for disabling
+# version updates for an ecosystem while keeping the configuration visible. The
+# state below is a decision, not an oversight -- do not "fix" it into an active
+# config.
+#
+# WHY OFF
+#   This repository has no package manifest of any kind: no package.json, go.mod,
+#   Cargo.toml or equivalent. Nothing here resolves dependencies. The only
+#   `package-ecosystem` that names something the repository actually holds is
+#   `github-actions`, covering the two SHA-pinned actions in
+#   .github/workflows/update-dns-lists.yml. Two pinned actions is not a
+#   dependency surface that warrants a standing pull-request queue, and a queue
+#   nobody triages reports itself as a control while operating as noise.
+#
+# WHAT THIS DOES NOT DO
+#   Dependabot SECURITY updates are a repository setting with no key in this
+#   file. Nothing written here turns them on or off, and a limit of zero does not
+#   withhold them -- their pull requests are not subject to this limit and do not
+#   count toward it. So this file being "off" is not a statement that the
+#   repository is quiet. Confirm the repository-level setting's state directly
+#   rather than inferring it from this file.
+#
+# WHAT WOULD CHANGE IT
+#   The repository gaining a real package manifest, or someone taking ownership
+#   of the queue. Raising the limit brings a `cooldown:` block with it. There is
+#   no cooldown here on purpose: while the limit is zero it would gate nothing,
+#   and an inert setting reads as a control that is operating.
+#
+#   Note when adding one: `github-actions` supports `default-days` but not the
+#   SemVer-bump keys such as `semver-major-days`. Writing the latter here adds a
+#   key nothing reads.
+#
+# UNAFFECTED BY THIS FILE
+#   The actions in the workflow are pinned to commit SHAs rather than tags or
+#   branches, because a tag is a mutable ref like any other. That pin is the
+#   control actually in force against a repointed action, and it holds whether
+#   or not Dependabot is enabled.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
