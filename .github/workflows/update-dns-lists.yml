@@ -1,0 +1,156 @@
+name: Update DNS discovery lists
+
+on:
+  # The nightly schedule stays OFF until one supervised manual run has published
+  # and established the baseline the shrink check compares against. Until a tree
+  # is committed, that check has no baseline and cannot fire.
+  # schedule:
+  #   - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Crawl and filter, but do not sign or publish'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # Two crawls publishing to the same zone would race on the tree sequence
+  # number. Never run this twice at once.
+  group: dns-lists
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # A fork of a public repository inherits its workflows. Without this guard a
+    # fork would run the schedule against its own (absent) secrets, failing
+    # nightly and forever.
+    if: github.repository == 'ethereumclassic/discv4-dns-lists'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out core-geth
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ethereumclassic/core-geth
+          path: .core-geth
+          # A moving branch. This build produces the tool that decides which
+          # nodes are published, so pinning to a commit or tag would be
+          # stronger; master is used deliberately for now to track the client's
+          # own bootnode list, and is the ref this crawl is seeded from.
+          ref: master
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .core-geth/go.mod
+          # setup-go caches by default, and its default lookup is root-only: it
+          # reads GITHUB_WORKSPACE with readdirSync and tests that listing for
+          # the literal name `go.mod` -- not a glob, and it does not descend.
+          # Verified in dist/setup/index.js at the SHA pinned above, which is the
+          # file the action actually runs.
+          #
+          # This repository has neither go.mod nor go.sum at its root; both live
+          # in .core-geth, which the step above creates. So the default lookup
+          # can never resolve here. The miss throws, but the caller catches it
+          # and downgrades it to a warning -- it does NOT fail the run, it
+          # silently disables the cache on a job that rebuilds a large Go client
+          # every night. Naming the path restores it.
+          #
+          # go.sum rather than go.mod: it is what the build's module set is
+          # actually resolved from, so it is the correct cache key.
+          cache-dependency-path: .core-geth/go.sum
+
+      - name: Build devp2p
+        # Upstream go-ethereum's devp2p has no "classic" or "mordor" value for
+        # -eth-network. Its filter REJECTS an unknown network -- measured, exit 1
+        # with `unknown network "classic"` -- so a build from the wrong source
+        # fails the run loudly rather than publishing an empty tree.
+        run: |
+          cd .core-geth
+          go build -o "$GITHUB_WORKSPACE/devp2p" ./cmd/devp2p
+          "$GITHUB_WORKSPACE/devp2p" --version || true
+
+      - name: Write signing key
+        if: ${{ !inputs.dry_run }}
+        env:
+          DNS_SIGNING_KEY: ${{ secrets.DNS_SIGNING_KEY }}
+          DNS_SIGNING_KEY_PASSWORD: ${{ secrets.DNS_SIGNING_KEY_PASSWORD }}
+        run: |
+          # devp2p's `dns sign` loads an Ethereum keystore JSON and reads its
+          # password from stdin. Both halves are required; a raw hex key fails
+          # with "error decrypting key".
+          if [ -z "$DNS_SIGNING_KEY" ] || [ -z "$DNS_SIGNING_KEY_PASSWORD" ]; then
+            echo "::error::DNS_SIGNING_KEY and DNS_SIGNING_KEY_PASSWORD must both be set. The tree cannot be signed."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$DNS_SIGNING_KEY"          > "$RUNNER_TEMP/dns-signing.json"
+          printf '%s' "$DNS_SIGNING_KEY_PASSWORD" > "$RUNNER_TEMP/dns-signing.pass"
+
+      - name: Crawl, filter, sign and publish
+        env:
+          DEVP2P: ${{ github.workspace }}/devp2p
+          CORE_GETH_SRC: ${{ github.workspace }}/.core-geth
+          DNS_SIGNING_KEY_FILE: ${{ runner.temp }}/dns-signing.json
+          DNS_SIGNING_KEY_PASSWORD_FILE: ${{ runner.temp }}/dns-signing.pass
+          # devp2p reads this as the EnvVar for its --token flag, so it is not
+          # passed on the command line where it would land in /proc/<pid>/cmdline.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # ethereumclassic.network is on deSEC and needs a diff-based publisher
+          # (deSEC allows 300 RRset changes/domain/day; a delete-and-recreate
+          # rewrite of a ~180-record tree is ~360). Until that publisher is
+          # configured, only the two Cloudflare domains are published. Add
+          # `ethereumclassic.network:desec` here once DESEC_PUBLISHER is set.
+          DOMAINS: 'ethereumclassic.net:cloudflare ethclassic.net:cloudflare'
+        run: |
+          ./scripts/update-lists.sh ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Remove signing key
+        # Runs even if the step above failed, so a crash does not leave the key
+        # on the runner for the rest of the job.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dns-signing.json" "$RUNNER_TEMP/dns-signing.pass"
+
+      - name: Commit the published trees
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Unquoted, so the shell expands these to real directory names
+          # before git sees them.
+          #
+          # The earlier form, `git add 'all.*.ethereumclassic.net'`, staged
+          # NOTHING: quoted, it reached git as a pathspec, and git matches
+          # pathspecs against file paths -- no file ends in `.ethereumclassic.net`,
+          # so it matched none, `git add` failed atomically (rc=128), and the
+          # `|| true` after it swallowed the error. Measured, with the trailing-
+          # glob form as the control, which does match and does stage.
+          #
+          # Either fix alone is sufficient -- unquoting, or moving the wildcard
+          # to the end. Both are used here, and the `|| true` is gone so that a
+          # staging failure is loud. .core-geth and the devp2p binary are
+          # gitignored and cannot be caught by these patterns.
+          git add all.json all.classic.* all.mordor.*
+
+          if git diff --cached --quiet; then
+            echo "No change in the published trees."
+            exit 0
+          fi
+
+          # Node counts in the message, so a degraded publish is visible in
+          # `git log` without diffing anything.
+          counts=$(for d in all.classic.* all.mordor.*; do
+                     [ -f "$d/nodes.json" ] || continue
+                     printf '%s=%s ' "$d" "$(jq 'length' "$d/nodes.json")"
+                   done)
+          git commit \
+            -m "lists: refresh from $(date -u +%Y-%m-%d) crawl -- ${counts%% }" \
+            -m "Published by ${{ github.workflow }} run ${{ github.run_id }}."
+          git push
