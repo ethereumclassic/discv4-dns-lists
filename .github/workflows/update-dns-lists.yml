@@ -41,9 +41,20 @@ jobs:
           path: .core-geth
           # A moving branch. This build produces the tool that decides which
           # nodes are published, so pinning to a commit or tag would be
-          # stronger; master is used deliberately for now to track the client's
-          # own bootnode list, and is the ref this crawl is seeded from.
-          ref: master
+          # stronger; a branch is used deliberately, because the crawl is seeded
+          # from the bootnode list in this same checkout and should track what
+          # the client actually ships rather than a frozen copy of it.
+          #
+          # main rather than master, and the reason is the toolchain. The Go
+          # version comes from this checkout's go.mod: master declares go 1.21,
+          # whose final patch is years past its last standard-library security
+          # fix, and master cannot be built by a supported Go at all -- it
+          # depends on a package that reaches into runtime internals modern Go
+          # no longer exposes. main declares go 1.26 and drops that dependency.
+          #
+          # The seed set is unaffected: both refs ship the same three classic
+          # and one mordor bootnodes, compared entry by entry before switching.
+          ref: main
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
