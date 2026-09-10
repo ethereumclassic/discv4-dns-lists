@@ -11,10 +11,19 @@ Each directory is one published tree, named after the DNS domain it serves.
 |---|---|---|
 | `ethereumclassic.net` | Cloudflare | `all.classic.` · `all.mordor.` |
 | `ethclassic.net` | Cloudflare | `all.classic.` · `all.mordor.` |
-| `ethereumclassic.network` | deSEC | `all.classic.` · `all.mordor.` |
+| `ethereumclassic.network` | Cloudflare | `all.classic.` · `all.mordor.` |
 
-Two providers across three domains, so that no single provider outage removes
-every path a client can use to bootstrap.
+**Three domains on one provider is not provider diversity.** A single Cloudflare
+account problem removes every path at once. `devp2p` automates only Cloudflare
+and Route53.
+
+Adding a provider needs no client release and no change to `devp2p`: the
+publisher is chosen per domain in `DOMAINS`, and the `txt` publisher renders a
+tree to JSON for any external tool to push. Such a publisher must be
+**incremental** — EIP-1459 records are content-addressed, so an unchanged node
+keeps its record name and value and only genuine churn has to be written. A
+delete-and-recreate rewrite of a ~180-record tree is ~360 operations and will
+exceed a typical free-tier daily change budget on the first night.
 
 ## Why this repository exists
 
@@ -74,31 +83,35 @@ therefore fails the run rather than quietly publishing an empty tree.
 
 ## How large a tree is, and why
 
-The cap is derived from the smallest DNS zone budget rather than from what the
-crawl happens to find.
+The cap comes from the DNS zone budget rather than from what the crawl happens
+to find. A tree of N nodes costs N, plus one root record, plus about one branch
+record per 11 nodes — measured against real signed trees at 11 nodes → 14
+records and 150 → 165.
 
-Measured with `devp2p dns to-txt` against real signed trees, a published node
-costs **~1.10 DNS records** at scale. A Cloudflare zone created on or after
-2024-09-01 on the free plan holds **200 records**, which is the smallest budget
-among the three domains, so it sets the shape for all of them and a client sees
-the same set wherever it looks:
+**Discovery does not get the whole zone.** A Cloudflare zone created on or after
+2024-09-01 on the free plan holds **200 records**, and these domains also carry
+the project's own services: mail records, the apex site, and subdomains for
+explorers and dashboards. Whatever the zone already holds counts against the
+same 200.
 
 ```
-classic  150 nodes -> ~165 records
-mordor    25 nodes -> ~32 records   (actual yield is 11; the cap is a ceiling)
-                      ~197, inside 200
+classic  120 nodes -> ~132 records
+mordor    15 nodes ->  ~18 records   (actual yield is 11 -> 14; the cap is a ceiling)
+                       ~150, leaving room for the domain's other services
 ```
 
 **A tree's job is to reach the first few peers**, after which the discv4 DHT does
-the work. Against three hardcoded bootnodes, 150 nodes is already a large
-improvement, and the marginal value of node 300 is close to zero.
+the work. Against three hardcoded bootnodes, 120 nodes is already a large
+improvement, and the marginal value of node 300 is close to zero. Mordor's cap of
+15 sits above an observed yield of 11 that has never been exceeded on any run
+measured, so it is headroom rather than a constraint.
 
 **No `snap.*` trees are published.** No core-geth path points snap discovery at
 one on any network — `SnapDiscoveryURLs` is set equal to `EthDiscoveryURLs` at
 every assignment site, and `SetDNSDiscoveryDefaults` hardcodes protocol `all`.
 Publishing them would spend roughly 45% of the record budget on trees nothing
-reads, which on a 200-record budget is the difference between 150 published
-classic nodes and 80.
+reads, which on a 200-record budget is the difference between 120 published
+classic nodes and 65.
 
 ## Prior art: etclabscore/discv4-dns-lists
 
@@ -117,22 +130,15 @@ and both that repository and the Ethereum Foundation's currently publish **zero
 nodes** into their `les.` trees.
 
 **Where this repository differs:** it seeds from the existing published trees
-before crawling, and it refuses to publish a tree that is empty, below an absolute
-floor, or sharply smaller than the last one. The reference implementation crawls
-from its own previous output and has no count check of any kind, so a failed crawl
-there publishes whatever it managed to find.
+before crawling, and it refuses to publish a tree that is empty, below an
+absolute floor, or sharply smaller than the last one. Those checks are additions
+for this deployment, not corrections to prior art.
 
-**On accumulation, because the obvious reading is wrong.** It is tempting to
-assume the reference's node set grows without bound — its `all.json` holds 11,707
-entries. It does not. Its workflow rebuilds `all.json` from the capped published
-trees before every crawl, so that figure is roughly **one 30-minute crawl's
-unfiltered reach across all networks**, not years of accumulation. Measured across
-8 consecutive runs it moves `9923 → 11803 → 9763 → 11628 → 10644 → 10701 → 9808
-→ 11707` — down as often as up.
-
-This repository does not condense: it seeds externally, from other operators'
-trees, then appends. That is the real difference, and it is why a low cold-start
-yield here is not evidence of a broken crawl.
+The two also build their working set differently. That repository rebuilds
+`all.json` from its own capped published trees before each crawl, so its size
+reflects roughly one crawl's unfiltered reach rather than accumulated history.
+This one seeds externally, from other operators' trees, and appends — which is
+why a low cold-start yield here is not evidence of a broken crawl.
 
 ## Two checks stand between a bad crawl and DNS
 
@@ -162,10 +168,16 @@ DEVP2P=/tmp/devp2p CORE_GETH_SRC=/tmp/core-geth ./scripts/update-lists.sh --dry-
 secrets. Use it to see what a crawl would produce before letting one reach DNS.
 
 **A tree that will not sync locally is not necessarily dead.** `devp2p dns sync`
-uses the system resolver, and a stub resolver such as `systemd-resolved` at
-`127.0.0.53` times out under the query volume of a large tree while the tree
-resolves fine through a public resolver. Re-query a failed lookup with
-`dig @1.1.1.1` before concluding anything.
+resolves through the system resolver and has no option to use another one. It
+issues its lookups concurrently, and a stub resolver such as `systemd-resolved`
+at `127.0.0.53` drops them under that concurrency while the same tree resolves
+fine through a public resolver — a sync returning nothing, against `dig`
+returning records normally, is the signature.
+
+`dig @1.1.1.1 TXT <tree-root>` confirms the tree is alive, but it cannot repair
+the sync: only the resolver the process itself uses decides that. Point the
+system resolver at a public one, or run the command in a namespace with its own
+`resolv.conf`, before concluding a tree is unreachable.
 
 ## Secrets
 
@@ -174,6 +186,12 @@ resolves fine through a public resolver. Re-query a failed lookup with
 | `DNS_SIGNING_KEY` | Ethereum **keystore JSON** for the key that signs the trees |
 | `DNS_SIGNING_KEY_PASSWORD` | password for that keystore |
 | `CLOUDFLARE_API_TOKEN` | token scoped to DNS edit on the Cloudflare zones |
+
+Cloudflare **zone IDs** are not in that table on purpose. `devp2p` cannot find a
+zone from a tree name, so each Cloudflare domain's zone ID is supplied through
+`CLOUDFLARE_ZONE_IDS` as `domain=zoneid` pairs. A zone ID grants nothing on its
+own and is shown in the provider's dashboard, so it travels as reviewable
+configuration in the workflow rather than as a secret.
 
 **The signing key is a keystore JSON, not a raw key.** `devp2p dns sign` loads it
 with `keystore.DecryptKey` and reads the password from stdin; a raw hex key fails

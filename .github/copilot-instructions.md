@@ -73,10 +73,10 @@ hand-edit a `nodes.json`.
 
 ## The numbers are load-bearing
 
-- **Caps** (`CAP_CLASSIC=150`, `CAP_MORDOR=25`) come from the smallest DNS zone
-  budget, not from crawl yield. A Cloudflare zone created on or after 2024-09-01
-  on the free plan holds 200 records; a published node costs ~1.10 records.
-  Raising a cap can break the smallest zone.
+- **Caps** (`CAP_CLASSIC=120`, `CAP_MORDOR=15`) come from the DNS zone
+  budget, not from crawl yield. A Cloudflare free-plan zone holds 200 records and
+  discovery does not get all of it — these domains also carry mail records, the
+  apex site and service subdomains. Raising a cap eats that headroom.
 - **Floors** (`MIN_NODES_CLASSIC=40`, `MIN_NODES_MORDOR=5`) are guards against a
   broken run, **not targets**. Mordor's 5 is deliberate — its ceiling is the
   network, not the crawl.

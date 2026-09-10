@@ -40,33 +40,54 @@ MIN_NODES_MORDOR="${MIN_NODES_MORDOR:-5}"
 # Refuse a published tree that shrinks below this fraction of the last one.
 SHRINK_TOLERANCE_PCT="${SHRINK_TOLERANCE_PCT:-50}"
 
-# Per-network published-node cap, derived from the smallest DNS zone budget
-# rather than from what the crawl happens to find.
+# Per-network published-node cap, derived from the DNS zone budget rather than
+# from crawl yield.
 #
-# Measured with `devp2p dns to-txt` against real signed trees: a published node
-# costs ~1.10 DNS records at scale, ~1.27 on a very small tree where the fixed
-# root and branch records have not amortized. A Cloudflare zone created on or
-# after 2024-09-01 on the free plan holds 200 records, and that is the smallest
-# budget among our three domains -- so it sets the shape for all of them, and a
-# client sees the same set wherever it looks.
+# A tree of N nodes costs N records, plus one root, plus about one branch per
+# 11 nodes: 11 nodes -> 14 records, 120 -> 132.
 #
-#   classic 150 -> ~165 records
-#   mordor   25 -> ~32 records  (actual yield is 11; the cap is a ceiling)
-#   total       -> ~197, inside 200
+# A Cloudflare free-plan zone holds 200 records, and discovery shares that zone
+# with the domain's other services -- mail, the apex site, and subdomains for
+# explorers and dashboards -- and with whatever the zone already carries.
+#
+#   classic 120 -> ~132 records
+#   mordor   15 ->  ~18 records  (actual yield is 11 -> 14; the cap is a ceiling)
 #
 # A tree's job is to reach the first few peers, after which the discv4 DHT does
-# the work. Against three hardcoded bootnodes, 150 nodes is already a large
-# improvement and the marginal value of node 300 is close to zero.
-CAP_CLASSIC="${CAP_CLASSIC:-150}"
-CAP_MORDOR="${CAP_MORDOR:-25}"
+# the work. Against three hardcoded bootnodes, 120 nodes is already a large
+# improvement and the marginal value of node 300 is close to zero. Mordor's cap
+# sits above its observed yield of 11, so it is headroom rather than a limit.
+CAP_CLASSIC="${CAP_CLASSIC:-120}"
+CAP_MORDOR="${CAP_MORDOR:-15}"
 cap_for() { case "$1" in classic) echo "$CAP_CLASSIC";; mordor) echo "$CAP_MORDOR";; *) echo 100;; esac; }
 
-# domain:publisher pairs. Three domains across two providers, so that no single
-# provider outage removes every ETC discovery path.
+# domain:publisher pairs.
 #
-# `devp2p dns` automates Cloudflare only among these; deSEC is published from
-# `to-txt` output by an external, diff-based publisher -- see publish_desec.
-DOMAINS="${DOMAINS:-ethereumclassic.net:cloudflare ethclassic.net:cloudflare ethereumclassic.network:desec}"
+# All three domains are on Cloudflare. This is not provider diversity: one
+# Cloudflare account problem removes every ETC discovery path at once.
+#
+# Adding a provider needs no devp2p change: render with `to-txt` and hand the
+# result to an external publisher. Such a publisher must be incremental -- see
+# publish_desec.
+DOMAINS="${DOMAINS:-ethereumclassic.net:cloudflare ethclassic.net:cloudflare ethereumclassic.network:cloudflare}"
+
+# Cloudflare zone IDs, as space-separated domain=zoneid pairs.
+#
+# devp2p cannot derive the zone. With --zoneid unset it looks up a zone named
+# after the tree -- "all.classic.ethereumclassic.net" -- which matches no zone,
+# and the publish fails with "zone could not be found".
+#
+# A zone ID is not a credential: it is visible in the provider dashboard and
+# grants nothing on its own.
+CLOUDFLARE_ZONE_IDS="${CLOUDFLARE_ZONE_IDS:-}"
+
+zone_id_for() {
+  local want="$1" pair
+  for pair in $CLOUDFLARE_ZONE_IDS; do
+    if [ "${pair%%=*}" = "$want" ]; then printf '%s\n' "${pair#*=}"; return 0; fi
+  done
+  return 1
+}
 
 log()  { printf '  %s\n' "$*"; }
 fail() { printf '  ERROR: %s\n' "$*" >&2; exit 1; }
@@ -173,12 +194,20 @@ crawl() {
 # declares as its EnvVar -- passing it on the command line as well would put the
 # token into /proc/<pid>/cmdline for no gain.
 publish_cloudflare() {
-  local dir="$1"
+  local dir="$1" zone="$2"
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || fail "CLOUDFLARE_API_TOKEN is unset"
-  "$DEVP2P" dns to-cloudflare "$dir" || fail "cloudflare publish failed for $dir"
+  [ -n "$zone" ] || fail "no Cloudflare zone ID for $dir"
+  # --zoneid must precede the directory: urfave/cli stops parsing flags at the
+  # first positional argument, so a flag placed after it is silently ignored.
+  "$DEVP2P" dns to-cloudflare --zoneid "$zone" "$dir" \
+    || fail "cloudflare publish failed for $dir"
 }
 
 # Publish to deSEC via to-txt plus an external publisher.
+#
+# No domain selects this publisher today. It is the shape a second provider
+# takes, and it fails rather than publishing if selected without
+# DESEC_PUBLISHER set.
 #
 # deSEC allows 300 RRset changes per domain per day. A ~180-record tree
 # republished by delete-and-recreate is ~360 operations, so it would fail on the
@@ -198,8 +227,8 @@ publish_desec() {
 }
 
 publish_tree() {
-  local domain="$1" publisher="$2" src="$3" net="$4" min="$5"
-  shift 5
+  local domain="$1" publisher="$2" src="$3" net="$4" min="$5" zone="$6"
+  shift 6
   local dir="$domain"
   mkdir -p "$dir"
   "$DEVP2P" nodeset filter "$src" -eth-network "$net" "$@" > "$dir/nodes.raw.json" \
@@ -230,7 +259,7 @@ publish_tree() {
   fi
 
   # The relative check is the one that matters after the first run: replacing a
-  # 150-node tree with a 44-node one is a downgrade for everyone who switched to
+  # 120-node tree with a 44-node one is a downgrade for everyone who switched to
   # it, even though 44 is a healthy crawl-only result.
   # Compare against the last COMMITTED tree, not the working file, which this
   # run has already overwritten.
@@ -259,7 +288,7 @@ publish_tree() {
     || fail "sign failed for $domain"
 
   case "$publisher" in
-    cloudflare) publish_cloudflare "$dir" ;;
+    cloudflare) publish_cloudflare "$dir" "$zone" ;;
     desec)      publish_desec "$dir" ;;
     txt)        "$DEVP2P" dns to-txt "$dir" "$dir/records.txt.json" \
                   || fail "to-txt failed for $domain"
@@ -270,6 +299,20 @@ publish_tree() {
 }
 
 log "devp2p: $("$DEVP2P" --version 2>/dev/null || echo unknown)"
+
+# Resolve every Cloudflare zone ID before the crawl rather than after it. A
+# missing ID is a configuration error that cannot fix itself, and discovering it
+# an hour into a run throws the crawl away -- on the nightly schedule that costs
+# a full day. Dry runs never publish, so they do not need one.
+if [ "$DRY_RUN" -eq 0 ]; then
+  for entry in $DOMAINS; do
+    case "${entry##*:}" in
+      cloudflare)
+        zone_id_for "${entry%%:*}" >/dev/null \
+          || fail "no Cloudflare zone ID for ${entry%%:*}: set CLOUDFLARE_ZONE_IDS" ;;
+    esac
+  done
+fi
 
 # Seed first, so the crawl revalidates the seeded nodes rather than ignoring them.
 seed_from_trees all.json
@@ -283,12 +326,14 @@ log "crawl set: $(count all.json) nodes total (both networks, unfiltered)"
 # EthDiscoveryURLs at every assignment site, and SetDNSDiscoveryDefaults
 # hardcodes protocol "all" -- and neither fukuii client reads them either. They
 # would cost roughly 45% of the zone's record budget for nothing, which on a
-# 200-record budget is the difference between 150 published classic nodes and 80.
+# 200-record budget is the difference between 120 published classic nodes and 65.
 for entry in $DOMAINS; do
   domain="${entry%%:*}"
   publisher="${entry##*:}"
-  publish_tree "all.classic.$domain" "$publisher" all.json classic "$MIN_NODES_CLASSIC"
-  publish_tree "all.mordor.$domain"  "$publisher" all.json mordor  "$MIN_NODES_MORDOR"
+  zone=""
+  [ "$publisher" = cloudflare ] && zone=$(zone_id_for "$domain")
+  publish_tree "all.classic.$domain" "$publisher" all.json classic "$MIN_NODES_CLASSIC" "$zone"
+  publish_tree "all.mordor.$domain"  "$publisher" all.json mordor  "$MIN_NODES_MORDOR"  "$zone"
 done
 
 log "done"

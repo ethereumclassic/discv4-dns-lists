@@ -113,12 +113,18 @@ jobs:
           # devp2p reads this as the EnvVar for its --token flag, so it is not
           # passed on the command line where it would land in /proc/<pid>/cmdline.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # ethereumclassic.network is on deSEC and needs a diff-based publisher
-          # (deSEC allows 300 RRset changes/domain/day; a delete-and-recreate
-          # rewrite of a ~180-record tree is ~360). Until that publisher is
-          # configured, only the two Cloudflare domains are published. Add
-          # `ethereumclassic.network:desec` here once DESEC_PUBLISHER is set.
-          DOMAINS: 'ethereumclassic.net:cloudflare ethclassic.net:cloudflare'
+          # All three domains publish to Cloudflare, the only provider devp2p
+          # drives natively without additional tooling. This is not provider
+          # diversity: one Cloudflare account problem removes every ETC
+          # discovery path at once.
+          DOMAINS: 'ethereumclassic.net:cloudflare ethclassic.net:cloudflare ethereumclassic.network:cloudflare'
+          # Configuration, not secrets: a zone ID is visible in the provider
+          # dashboard and grants nothing on its own. devp2p cannot derive them
+          # -- see scripts/update-lists.sh.
+          CLOUDFLARE_ZONE_IDS: >-
+            ethereumclassic.net=bc79166f3eca64edddeec1b6e0e4489d
+            ethclassic.net=b1a010358b1dbc6af14b6e880af34df8
+            ethereumclassic.network=41313b1ad8c6c958fc54086b89d106aa
         run: |
           ./scripts/update-lists.sh ${{ inputs.dry_run && '--dry-run' || '' }}
 

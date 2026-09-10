@@ -87,36 +87,49 @@ hand-maintained source. Do not edit a `nodes.json` by hand.
 
 ## Domains
 
-Three domains across two DNS providers, so no single provider outage removes
-every path a client can use to bootstrap.
+Three domains, all on Cloudflare.
 
 | Domain | Provider | Publisher |
 |---|---|---|
 | `ethereumclassic.net` | Cloudflare | `devp2p dns to-cloudflare` |
 | `ethclassic.net` | Cloudflare | `devp2p dns to-cloudflare` |
-| `ethereumclassic.network` | deSEC | `to-txt` + an external diff-based publisher |
+| `ethereumclassic.network` | Cloudflare | `devp2p dns to-cloudflare` |
 
-**deSEC needs a diff-based publisher and this is not a preference.** deSEC allows
-300 RRset changes per domain per day; republishing a ~180-record tree by
-delete-and-recreate is ~360 operations, so it would fail on the first night and
-every night after. EIP-1459 records are content-addressed, so an unchanged node
-keeps its record name and value — a diff-based publisher writes only genuine
-churn. Until `DESEC_PUBLISHER` is configured, the workflow publishes the two
-Cloudflare domains only.
+**One provider is not provider diversity.** A single Cloudflare account problem
+removes every ETC discovery path at once. Do not describe these trees as
+provider-redundant.
 
-**Do not add DNS providers to `devp2p`.** It automates Cloudflare and Route53
-only, and those two already cost twelve-plus vendor SDK modules. Anything else
-is published from `to-txt` output by a script in this repository.
+**Each Cloudflare domain needs its zone ID.** `devp2p` resolves a zone by name
+only when `--zoneid` is absent, and it passes the *tree* name to that lookup, so
+it matches no zone and the publish fails. `CLOUDFLARE_ZONE_IDS` carries
+`domain=zoneid` pairs; the script refuses before the crawl if one is missing. A
+zone ID is not a credential and belongs in the workflow's env block, not its
+secrets.
+
+**Adding a provider needs no `devp2p` change and no client release.** It
+automates Cloudflare and Route53 only, so anything else is published from
+`to-txt` output by a script in this repository, selected per domain in
+`DOMAINS`.
+
+**Any such publisher must be incremental.** EIP-1459 records are
+content-addressed, so an unchanged node keeps its record name and value and only
+genuine churn needs writing. A delete-and-recreate rewrite of a ~180-record tree
+is ~360 operations, which exceeds a typical free-tier daily change budget. The
+`desec` branch is the shape this takes: it renders with `to-txt` and delegates
+to `$DESEC_PUBLISHER`. No publisher is configured, so selecting that branch
+fails rather than publishing.
 
 ## The numbers, and why they are what they are
 
 Change none of these without reading the reasoning in `README.md` and in the
 script's own comments first.
 
-- **Caps** — `CAP_CLASSIC=150`, `CAP_MORDOR=25`. Derived from the *smallest* DNS
-  zone budget, not from crawl yield: a Cloudflare zone created on or after
-  2024-09-01 on the free plan holds 200 records, and a published node costs
-  ~1.10 records at scale. Raising a cap can break the smallest zone.
+- **Caps** — `CAP_CLASSIC=120`, `CAP_MORDOR=15`. Derived from the DNS zone
+  budget, not from crawl yield. A tree of N nodes costs N + 1 root + ~1 branch
+  per 11 nodes, so 120 → ~132 records and 15 → ~18. A Cloudflare free-plan zone
+  holds 200, and **discovery does not get all of it**: these domains also carry
+  mail records, the apex site, and service subdomains, and whatever the zone
+  already holds counts against the same 200. Raising a cap eats that headroom.
 - **Floors** — `MIN_NODES_CLASSIC=40`, `MIN_NODES_MORDOR=5`. These are floors
   against a broken run, **not targets**. `MIN_NODES_MORDOR` is 5 against an
   observed 11 deliberately: Mordor's ceiling is the network, not the crawl, and
