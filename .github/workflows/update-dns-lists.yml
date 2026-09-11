@@ -1,11 +1,16 @@
 name: Update DNS discovery lists
 
 on:
-  # The nightly schedule stays OFF until one supervised manual run has published
-  # and established the baseline the shrink check compares against. Until a tree
-  # is committed, that check has no baseline and cannot fire.
-  # schedule:
-  #   - cron: '0 4 * * *'
+  # 04:20 rather than the top of the hour: GitHub delays scheduled runs during
+  # periods of high load and documents the start of every hour as one.
+  #
+  # Daily matches the record TTL. Leaf records are published with Cloudflare's
+  # maximum TTL of one day, so a resolver serves a cached copy for that long
+  # regardless -- publishing more often rewrites records nothing re-reads. The
+  # root carries a 30 minute TTL and clients re-check it on the same interval,
+  # so a new sequence number reaches a running node within the hour.
+  schedule:
+    - cron: '20 4 * * *'
   workflow_dispatch:
     inputs:
       dry_run:

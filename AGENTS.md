@@ -126,10 +126,10 @@ script's own comments first.
 
 - **Caps** — `CAP_CLASSIC=120`, `CAP_MORDOR=15`. Derived from the DNS zone
   budget, not from crawl yield. A tree of N nodes costs N + 1 root + ~1 branch
-  per 11 nodes, so 120 → ~132 records and 15 → ~18. A Cloudflare free-plan zone
-  holds 200, and **discovery does not get all of it**: these domains also carry
-  mail records, the apex site, and service subdomains, and whatever the zone
-  already holds counts against the same 200. Raising a cap eats that headroom.
+  per 11 nodes, so 120 → ~132 records and 15 → ~18, **~150 together**. A
+  Cloudflare free-plan zone holds 200 for the whole zone, not per tree — both
+  trees share it, alongside mail records, the apex site and service subdomains,
+  and whatever the zone already holds. Raising either cap eats that headroom.
 - **Floors** — `MIN_NODES_CLASSIC=40`, `MIN_NODES_MORDOR=5`. These are floors
   against a broken run, **not targets**. `MIN_NODES_MORDOR` is 5 against an
   observed 11 deliberately: Mordor's ceiling is the network, not the crawl, and

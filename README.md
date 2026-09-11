@@ -88,11 +88,12 @@ to find. A tree of N nodes costs N, plus one root record, plus about one branch
 record per 11 nodes — measured against real signed trees at 11 nodes → 14
 records and 150 → 165.
 
-**Discovery does not get the whole zone.** A Cloudflare zone created on or after
-2024-09-01 on the free plan holds **200 records**, and these domains also carry
-the project's own services: mail records, the apex site, and subdomains for
-explorers and dashboards. Whatever the zone already holds counts against the
-same 200.
+**Both trees share one budget, and discovery does not get all of it.** A
+Cloudflare zone created on or after 2024-09-01 on the free plan holds **200
+records** — for the whole zone, not per tree. The classic and mordor trees are
+both in it, alongside the project's own services: mail records, the apex site,
+and subdomains for explorers and dashboards. Whatever the zone already holds
+counts against the same 200.
 
 ```
 classic  120 nodes -> ~132 records

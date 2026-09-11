@@ -46,12 +46,14 @@ SHRINK_TOLERANCE_PCT="${SHRINK_TOLERANCE_PCT:-50}"
 # A tree of N nodes costs N records, plus one root, plus about one branch per
 # 11 nodes: 11 nodes -> 14 records, 120 -> 132.
 #
-# A Cloudflare free-plan zone holds 200 records, and discovery shares that zone
-# with the domain's other services -- mail, the apex site, and subdomains for
-# explorers and dashboards -- and with whatever the zone already carries.
+# The budget is 200 records for a whole Cloudflare free-plan zone, and BOTH
+# trees live in the same zone -- they are not budgeted separately. Discovery
+# also shares that zone with the domain's other services: mail, the apex site,
+# subdomains for explorers and dashboards, and whatever it already carries.
 #
 #   classic 120 -> ~132 records
 #   mordor   15 ->  ~18 records  (actual yield is 11 -> 14; the cap is a ceiling)
+#   both              ~150 of 200, leaving the rest for the domain's services
 #
 # A tree's job is to reach the first few peers, after which the discv4 DHT does
 # the work. Against three hardcoded bootnodes, 120 nodes is already a large
@@ -130,16 +132,37 @@ fi
 [ -n "$BOOT_MORDOR" ]  || fail "no mordor bootnodes: set CORE_GETH_SRC or MORDOR_BOOTNODES"
 log "seeded from $(tr ',' '\n' <<<"$BOOT_CLASSIC" | wc -l) classic and $(tr ',' '\n' <<<"$BOOT_MORDOR" | wc -l) mordor bootnodes"
 
-# Seed the node set from the DNS trees other operators already publish, then let
-# the crawl revalidate every one of them. This is not trusting their lists: the
-# crawl re-pings its input set and drops what does not answer, so a hostile or
-# stale entry is removed rather than republished.
+# Seed the node set from published DNS trees, then let the crawl revalidate
+# every one of them. This is not trusting the publishers: the crawl re-pings its
+# input set and drops what does not answer, so a stale or hostile entry is
+# removed rather than republished.
 #
-# It matters most on Mordor. Measured 2026-08-28: a 15-minute crawl seeded from
-# the single hardcoded Mordor bootnode matched 3 nodes, while the existing
-# published tree carried 11 -- so a tree built from the crawl alone would be a
-# downgrade for anyone who switched to it. Seeded this way, ours is a superset.
-SEED_TREES="${SEED_TREES:-enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@all.classic.blockd.info,enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@all.classic.etcdisco.net,enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@all.mordor.blockd.info,enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@all.mordor.etcdisco.net}"
+# It matters most on Mordor. Measured: a 15-minute crawl seeded from the single
+# hardcoded Mordor bootnode matched 3 nodes, while the published trees carried
+# 11 -- so a tree built from the crawl alone would be a downgrade for anyone who
+# switched to it. Seeded this way, ours is a superset.
+#
+# This project's own trees are seeded first, so a run can rebuild from what it
+# last published if the others stop resolving. Two domains rather than one,
+# because a seed sync that fails is skipped silently and one zone should not be
+# able to take the whole seed with it.
+#
+# The predecessor trees stay until this project runs its own bootnodes. They are
+# currently the only thing replenishing Mordor -- the crawl has contributed zero
+# Mordor nodes on every run measured -- so dropping them now would leave that
+# tree decaying with nothing to refill it.
+SEED_KEY_OURS="enrtree://APDLRZ2T7ERXPWXX4D5USB32NIFYHXMFVZQ3DZALK6JJJ5L4VSYIQ@"
+SEED_KEY_PRIOR="enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@"
+
+SEED_TREES="${SEED_TREES:-\
+${SEED_KEY_OURS}all.classic.ethereumclassic.net,\
+${SEED_KEY_OURS}all.mordor.ethereumclassic.net,\
+${SEED_KEY_OURS}all.classic.ethclassic.net,\
+${SEED_KEY_OURS}all.mordor.ethclassic.net,\
+${SEED_KEY_PRIOR}all.classic.blockd.info,\
+${SEED_KEY_PRIOR}all.classic.etcdisco.net,\
+${SEED_KEY_PRIOR}all.mordor.blockd.info,\
+${SEED_KEY_PRIOR}all.mordor.etcdisco.net}"
 
 count() { python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$1" 2>/dev/null || echo 0; }
 
