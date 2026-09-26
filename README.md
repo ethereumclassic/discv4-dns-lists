@@ -183,7 +183,8 @@ nodes** into their `les.` trees.
 
 **Where this repository differs:** it seeds from the existing published trees
 before crawling, and it refuses to publish a tree that is empty, below an
-absolute floor, or sharply smaller than the last one. Those checks are additions
+absolute floor, or sharply smaller than the last one, or any tree at all on a run
+where most of the last tree's nodes stopped answering. Those checks are additions
 for this deployment, not corrections to prior art.
 
 The two also build their working set differently. That repository rebuilds
@@ -192,7 +193,7 @@ reflects roughly one crawl's unfiltered reach rather than accumulated history.
 This one seeds externally, from other operators' trees, and appends — which is
 why a low cold-start yield here is not evidence of a broken crawl.
 
-## Two checks stand between a bad crawl and DNS
+## Three checks stand between a bad crawl and DNS
 
 **An absolute floor** per network, and **a relative one**: a tree that shrinks
 below half of the last published count is refused. Neither alone is sufficient. A
@@ -203,8 +204,19 @@ The relative check compares against the last **committed** tree, which is why th
 commit step matters as much as the publish step — without it there is no baseline
 and the check cannot fire at all.
 
-Both refuse rather than publish. A client reading a tree cannot tell a broken
-crawl from a quiet network.
+**A retention check** catches the failure the other two cannot see. When the
+runner itself loses the network, the crawl marks every node it cannot reach as
+failing, but the cap still fills each tree from nodes that answered on earlier
+runs, so no tree shrinks. So before anything is published, the run counts how
+many of the last committed tree's nodes answered it, and refuses when fewer than
+half did: a network does not lose half its reachable nodes overnight, and a
+runner's connection can. Over the first sixteen nightlies, 111 to 119 of 120
+classic nodes answered the next night, and mordor's worst night was 8 of 13. A
+refused run commits nothing, so the scores it cut on nodes it could not reach are
+discarded with it.
+
+All three refuse rather than publish. A client reading a tree cannot tell a
+broken crawl from a quiet network.
 
 ## Running it by hand
 

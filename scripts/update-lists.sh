@@ -22,6 +22,10 @@ CRAWL_TIMEOUT="${CRAWL_TIMEOUT:-30m}"
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
+# When this run began, in the crawler's own timestamp format (UTC, whole
+# seconds), so a node's lastResponse says whether it answered this run.
+RUN_START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
 # A crawl that returns almost nothing is a broken crawl, not a small network.
 # Publishing its result would replace a working tree with a dead one, and the
 # clients that read it have no way to tell the difference. Refuse instead.
@@ -39,6 +43,16 @@ MIN_NODES_MORDOR="${MIN_NODES_MORDOR:-5}"
 
 # Refuse a published tree that shrinks below this fraction of the last one.
 SHRINK_TOLERANCE_PCT="${SHRINK_TOLERANCE_PCT:-50}"
+
+# Refuse the whole run when fewer than this share of the nodes published last
+# time answered this run's crawl. A network does not lose half its reachable
+# nodes overnight; this runner's connection -- its network, its resolver, the
+# host -- can, and a crawl that cannot reach the network marks every node as
+# failing without shrinking the tree: the cap fills it from earlier runs, so
+# neither the floor nor the shrink check sees anything wrong. Measured over the
+# first sixteen nightlies, 111 to 119 of 120 classic nodes answered the next
+# night's crawl, and mordor's worst night was 8 of 13.
+RETENTION_MIN_PCT="${RETENTION_MIN_PCT:-50}"
 
 # Per-network published-node cap, derived from the DNS zone budget rather than
 # from crawl yield.
@@ -384,6 +398,28 @@ json.dump(kept, open(path, "w"), indent=2)
 PYEOF
 }
 
+# Refuse if fewer than RETENTION_MIN_PCT of the nodes in the last committed tree
+# answered this run -- see RETENTION_MIN_PCT. A node missing from the set counts
+# as not answering. The first publish has no committed tree and is not checked.
+check_retention() {
+  local dir="$1"
+  python3 - "$dir" "$RUN_START" "$RETENTION_MIN_PCT" all.json <(git show "HEAD:$dir/nodes.json" 2>/dev/null) <<'PYEOF'
+import json, sys
+label, start, pct, current, committed = sys.argv[1:6]
+try:
+    prev = json.load(open(committed))
+except ValueError:
+    print("  %s: no committed tree, nothing to compare against" % label)
+    sys.exit(0)
+now = json.load(open(current))
+back = sum(1 for nid in prev if str(now.get(nid, {}).get("lastResponse") or "") >= start)
+print("  %s: %d of the %d nodes published last time answered this run" % (label, back, len(prev)))
+if prev and back * 100 < len(prev) * int(pct):
+    sys.exit("  ERROR: %s: under %s%% of last time's nodes answered. A network does not lose half\n"
+             "  its reachable nodes overnight; this runner's connection can." % (label, pct))
+PYEOF
+}
+
 publish_tree() {
   local domain="$1" publisher="$2" src="$3" net="$4" min="$5" zone="$6"
   shift 6
@@ -484,6 +520,17 @@ seed_from_trees all.json
 crawl classic "$BOOT_CLASSIC" all.json
 crawl mordor  "$BOOT_MORDOR"  all.json
 log "crawl set: $(count all.json) nodes total (both networks, unfiltered)"
+
+# Before any tree is published, so a refusal never leaves one domain updated and
+# the others not. A refused run commits nothing, so the scores this crawl cut on
+# nodes it could not reach are discarded with it.
+for entry in $DOMAINS; do
+  domain="${entry%%:*}"
+  for net in classic mordor; do
+    check_retention "all.$net.$domain" \
+      || fail "all.$net.$domain: most of last time's nodes did not answer -- refusing to publish anything"
+  done
+done
 
 # Only `all.` trees are published. No core-geth path points snap discovery at a
 # `snap.*` tree on any network -- SnapDiscoveryURLs is set equal to
