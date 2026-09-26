@@ -49,8 +49,9 @@ one operator has the same exposure whoever that operator is.
 
 1. **Seed** from the DNS trees other operators already publish.
 2. **Crawl.** `devp2p discv4 crawl` walks the DHT from the bootnodes the client
-   itself ships, and **revalidates the seeded set** — every node is re-pinged, and
-   what does not answer is dropped.
+   itself ships, and **revalidates the seeded set** — every node is re-pinged; one
+   that stops answering is dropped after a few missed checks, and a seeded node
+   that never answers is dropped once no seed tree carries it.
 3. **Filter.** `devp2p nodeset filter -eth-network classic|mordor` keeps nodes
    whose fork ID is anywhere on that network's fork schedule. The script then
    keeps only the nodes on its **current** fork ID — see
@@ -59,8 +60,17 @@ one operator has the same exposure whoever that operator is.
    **commit** the result here.
 
 **Seeding is not trusting the other publishers.** Step 2 re-pings everything step
-1 brought in, so a stale or hostile entry is removed rather than republished.
-What seeding buys is reach; verification still happens locally.
+1 brought in, so a stale or hostile entry is not republished while live nodes
+exist, and it is removed from the set as well. What seeding buys is reach;
+verification still happens locally.
+
+**A seeded node that never answers needs its own removal.** `devp2p` drops a node
+whose score falls to zero, but skips rather than drops one that is at zero
+already, which is where every seeded node starts. So a seed record that never
+answers is pruned once no seed tree carries it, and only on a run where every
+seed tree synced: a tree that failed may still carry it, and a run where the
+syncs fail is more likely a resolver or network fault here than a verdict on the
+records.
 
 **It also decides whether this is worth publishing at all.** Measured 2026-08-28:
 

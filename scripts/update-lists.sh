@@ -158,8 +158,11 @@ log "seeded from $(tr ',' '\n' <<<"$BOOT_CLASSIC" | wc -l) classic and $(tr ',' 
 
 # Seed the node set from published DNS trees, then let the crawl revalidate
 # every one of them. This is not trusting the publishers: the crawl re-pings its
-# input set and drops what does not answer, so a stale or hostile entry is
-# removed rather than republished.
+# input set, and a node that does not answer ranks behind every node that did,
+# so a stale or hostile entry is not republished while live ones exist. Nor does
+# it stay: a node that stops answering loses half its score per missed check and
+# is dropped at zero, and a seeded node that has never answered is pruned in
+# seed_from_trees once no seed tree carries it.
 #
 # It matters most on Mordor. Measured: a 15-minute crawl seeded from the single
 # hardcoded Mordor bootnode matched 3 nodes, while the published trees carried
@@ -191,7 +194,7 @@ ${SEED_KEY_PRIOR}all.mordor.etcdisco.net}"
 count() { python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$1" 2>/dev/null || echo 0; }
 
 seed_from_trees() {
-  local out="$1" tmp merged=0
+  local out="$1" tmp merged=0 failed=0
   [ -n "$SEED_TREES" ] || { log "no seed trees configured"; return 0; }
   tmp=$(mktemp -d); trap 'rm -rf "$tmp"' RETURN
   local url
@@ -206,24 +209,45 @@ seed_from_trees() {
       merged=$((merged + n))
     else
       log "seed tree ${url##*@}: unreachable, skipping"
+      failed=$((failed + 1))
     fi
   done
   [ "$merged" -eq 0 ] && { log "no seed nodes obtained"; return 0; }
-  python3 - "$out" "$tmp" <<'PYEOF'
+  python3 - "$out" "$tmp" "$failed" <<'PYEOF'
 import json, os, sys
-out, tmp = sys.argv[1], sys.argv[2]
+out, tmp, failed = sys.argv[1], sys.argv[2], int(sys.argv[3])
 merged = json.load(open(out)) if os.path.exists(out) else {}
-added = 0
+added, seeded = 0, set()
 for root, _, files in os.walk(tmp):
     for f in files:
         if f != "nodes.json":
             continue
         for k, v in json.load(open(os.path.join(root, f))).items():
+            seeded.add(k)
             if k not in merged:
                 merged[k] = v
                 added += 1
+
+# The crawl never removes a node that has never answered it: devp2p halves a
+# failing node's score and drops it at zero, but a node already at zero is
+# skipped rather than dropped, so a seed record that never answers would stay
+# forever. Prune it once no seed tree carries it -- but only on a run where
+# every seed tree synced. A tree that failed may still carry it, and a run where
+# the syncs fail is more likely a resolver or network fault here than a verdict
+# on the records.
+def never_answered(v):
+    return not v.get("score") and str(v.get("lastResponse") or "0001").startswith("0001")
+
+pruned = 0
+if failed:
+    print("  %d seed tree(s) unreachable: not pruning records that never answered" % failed)
+else:
+    for k in [k for k, v in merged.items() if k not in seeded and never_answered(v)]:
+        del merged[k]
+        pruned += 1
 json.dump(merged, open(out, "w"), indent=2)
-print("  merged %d new nodes from seed trees (set now %d)" % (added, len(merged)))
+print("  merged %d new nodes from seed trees, pruned %d that never answered (set now %d)"
+      % (added, pruned, len(merged)))
 PYEOF
 }
 

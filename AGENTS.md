@@ -150,8 +150,11 @@ broken crawl from a quiet network, so refusing is always the correct direction.
   set rather than replacing it. One crawl sees one moment — a low cold-start
   yield is not a broken crawl.
 - **Seeding is reach, not trust.** The pipeline seeds from other operators'
-  published trees, then the crawl re-pings every seeded node and drops what does
-  not answer. A stale or hostile entry is removed, not republished.
+  published trees, then the crawl re-pings every seeded node. A node that does
+  not answer is not republished, and it is removed: after a few missed checks
+  if it once answered, or, if it never answered, once no seed tree carries it.
+  That second prune runs only when every seed tree synced, so a resolver fault
+  here is never read as the trees dropping those records.
 - **Only `all.*` trees are published.** No `snap.*` — no core-geth path points
   snap discovery at one on any network. No `les.*` — LES is being retired, and
   the publishers that still carry those trees publish zero nodes into them.
