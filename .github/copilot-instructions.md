@@ -32,7 +32,8 @@ suggest adding one.
 
 - `bash` — `scripts/update-lists.sh`, the whole pipeline
 - `jq` — sorting and capping node sets
-- `python3` — seed merge, node counts, shrink baseline
+- `python3` — seed merge and prune, node counts, fork check, shrink and
+  retention baselines
 - `devp2p` — **built from `ethereumclassic/core-geth`**, not from upstream
   go-ethereum, whose copy has no `classic` or `mordor` value for `-eth-network`
   and rejects them with exit 1
@@ -84,9 +85,19 @@ hand-edit a `nodes.json`.
   against a crawl that lost its seed trees. It reads its baseline with
   `git show HEAD:<dir>/nodes.json`, so the commit step is load-bearing: with
   nothing committed there is no baseline and the check cannot fire.
+- **Retention** (`RETENTION_MIN_PCT=50`) refuses the whole run, before anything
+  is published, if fewer than half of the last committed tree's nodes answered
+  it. It guards against the runner's own connectivity failing, which marks every
+  node as failing without shrinking any tree.
+- **Fork hashes** (`FORK_HASH_CLASSIC=be46d57c`, `FORK_HASH_MORDOR=3a6b00d7`)
+  restrict a tree to nodes on its network's current fork hash, because
+  `-eth-network` admits every stage of the fork schedule, including the genesis
+  stage. Once nodes appear on the hash that follows a pin, the run refuses and
+  names the new value. Change a pin only after that network has passed a fork,
+  taking the value from core-geth's `core/forkid/forkid_test.go`.
 
-Both checks refuse rather than publish. Refusing is always the correct
-direction — a client cannot tell a broken crawl from a quiet network.
+Every one of these checks refuses rather than publishes. Refusing is always the
+correct direction — a client cannot tell a broken crawl from a quiet network.
 
 ## Ask before
 
@@ -95,7 +106,8 @@ direction — a client cannot tell a broken crawl from a quiet network.
 - **Uncommenting the `schedule:` block.** It is off on purpose: until one
   supervised run has published and committed a tree, the shrink check has no
   baseline.
-- **Changing a cap, floor or the shrink tolerance.**
+- **Changing a cap, floor, the shrink tolerance, the retention threshold or a
+  fork hash.**
 - **Adding a domain, DNS provider or publisher.** `devp2p` automates Cloudflare
   and Route53 only; anything else is published from `to-txt` output.
 - **Editing anything under `.github/workflows/`.** These run in the

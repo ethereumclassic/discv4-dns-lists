@@ -24,7 +24,7 @@ That absence is real; do not go looking for a manifest to update.
 |---|---|---|
 | `bash` | `scripts/update-lists.sh` | system |
 | `jq` | sorting and capping node sets | system |
-| `python3` | seed merge, node counts, shrink baseline | system |
+| `python3` | seed merge and prune, node counts, fork check, shrink and retention baselines | system |
 | `git` | committing published trees | system |
 | `devp2p` | crawl, filter, sign, publish | **built from source, see below** |
 
@@ -140,9 +140,24 @@ script's own comments first.
   340-node tree with a healthy-looking 44-node one. It reads its baseline from
   `git show HEAD:<dir>/nodes.json`, **so the commit step is load-bearing**: if
   trees are never committed there is no baseline and the check cannot fire.
+- **Retention** — `RETENTION_MIN_PCT=50`. Before anything is published, the run
+  refuses if fewer than half of the last committed tree's nodes answered it. This
+  is the guard against the runner's own connectivity failing: a crawl that cannot
+  reach the network marks every node as failing but does not shrink any tree,
+  because the cap fills it from earlier runs. Measured over the first sixteen
+  nightlies: 111 to 119 of 120 classic nodes answered the next night, and
+  mordor's worst night was 8 of 13.
+- **Fork hashes** — `FORK_HASH_CLASSIC=be46d57c`, `FORK_HASH_MORDOR=3a6b00d7`. A
+  published tree keeps only nodes on its network's current fork hash, because
+  `-eth-network` admits every stage of the fork schedule, including the genesis
+  stage that unsynced and non-ETC nodes advertise. Once nodes appear on the hash
+  that follows a pin, the run refuses and names the new value. Change a pin only
+  when that network has passed a fork, and take the value from core-geth's
+  `core/forkid/forkid_test.go`, never from the refusal alone.
 
-Both checks refuse rather than publish. A client reading a tree cannot tell a
-broken crawl from a quiet network, so refusing is always the correct direction.
+Every one of these checks refuses rather than publishes. A client reading a tree
+cannot tell a broken crawl from a quiet network, so refusing is always the
+correct direction.
 
 ## Facts that mislead if you do not know them
 
@@ -193,7 +208,8 @@ Do not "fix" the disabled config into an active one. Its state is a decision.
   commented out on purpose: until one supervised run has published and committed
   a tree, the shrink check has no baseline and cannot fire. Uncommenting it
   makes the *schedule*, not a supervised run, perform the first publish.
-- **Changing a cap, a floor or the shrink tolerance.** See above.
+- **Changing a cap, a floor, the shrink tolerance, the retention threshold or a
+  fork hash.** See above.
 - **Adding a domain, a DNS provider or a publisher.**
 - **Changing anything under `.github/workflows/`.** These run in the
   organization's CI with the organization's secrets.
@@ -212,7 +228,7 @@ Do not "fix" the disabled config into an active one. Its state is a decision.
 - **Hand-edit a generated `nodes.json`.**
 - **Add, change, or recommend changing `LICENSE`.** Licensing is the operator's
   and is a legal question before it is a technical one.
-- **Publish a tree that failed a check.** Both checks refuse deliberately.
+- **Publish a tree that failed a check.** Every check refuses deliberately.
 
 ### Secrets the workflow expects
 
