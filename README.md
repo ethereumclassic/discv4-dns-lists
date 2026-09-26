@@ -218,6 +218,23 @@ discarded with it.
 All three refuse rather than publish. A client reading a tree cannot tell a
 broken crawl from a quiet network.
 
+## A refusal is reported, not silent
+
+GitHub's own notification for a scheduled run goes only to whoever last edited
+the workflow's schedule. So **every scheduled run also rewrites one issue**,
+labelled `pipeline-status` and opened
+by the workflow, with its result: the state, the last success and failure, the
+consecutive-failure count and the latest failure's `ERROR` lines, never the whole
+log. GitHub sends no notification for an edit, so the run also **comments** on
+the issue when the state changes: on the first failure after a success, and on
+the first success after failures. Subscribing to that one issue is how to hear
+about exactly those, without a new issue or a notification every night.
+
+The issue is found by its label and its author, never its title, since anyone
+can open an issue with a matching title. If the runner dies before the report
+step runs, nothing is posted; the last-success date in the issue's title is what
+shows the gap.
+
 ## Running it by hand
 
 ```bash

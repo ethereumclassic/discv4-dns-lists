@@ -34,6 +34,8 @@ suggest adding one.
 - `jq` — sorting and capping node sets
 - `python3` — seed merge and prune, node counts, fork check, shrink and
   retention baselines
+- `gh` — `scripts/report-status.sh`, the status issue; preinstalled on GitHub
+  runners
 - `devp2p` — **built from `ethereumclassic/core-geth`**, not from upstream
   go-ethereum, whose copy has no `classic` or `mordor` value for `-eth-network`
   and rejects them with exit 1
@@ -64,6 +66,7 @@ running, but nothing gates on either.
 
 ```
 scripts/update-lists.sh                 # seed, crawl, filter, cap, sign, publish
+scripts/report-status.sh                # rewrites the status issue after every run
 .github/workflows/update-dns-lists.yml  # runs it; builds devp2p, handles secrets, commits
 all.json                                # working node set, unfiltered, cumulative
 all.<network>.<domain>/nodes.json       # one published tree per network per domain
@@ -98,6 +101,10 @@ hand-edit a `nodes.json`.
 
 Every one of these checks refuses rather than publishes. Refusing is always the
 correct direction — a client cannot tell a broken crawl from a quiet network.
+
+A refused or failed run is reported on one issue labelled `pipeline-status`,
+which the workflow rewrites after every scheduled run and comments on only when
+the state changes. Subscribe to it for alerts; do not close it.
 
 ## Ask before
 

@@ -26,6 +26,7 @@ That absence is real; do not go looking for a manifest to update.
 | `jq` | sorting and capping node sets | system |
 | `python3` | seed merge and prune, node counts, fork check, shrink and retention baselines | system |
 | `git` | committing published trees | system |
+| `gh` | `scripts/report-status.sh`, the status issue | preinstalled on GitHub runners |
 | `devp2p` | crawl, filter, sign, publish | **built from source, see below** |
 
 **`devp2p` must be built from [`ethereumclassic/core-geth`](https://github.com/ethereumclassic/core-geth).**
@@ -79,6 +80,7 @@ been misread as a network fault more than once.
 
 ```
 scripts/update-lists.sh              # the whole pipeline: seed, crawl, filter, cap, sign, publish
+scripts/report-status.sh             # rewrites the status issue after every scheduled run
 .github/workflows/update-dns-lists.yml  # runs it; builds devp2p, handles secrets, commits results
 all.json                             # working node set, unfiltered, cumulative across runs
 all.<network>.<domain>/nodes.json    # one published tree per network per domain
@@ -172,6 +174,13 @@ correct direction.
   if it once answered, or, if it never answered, once no seed tree carries it.
   That second prune runs only when every seed tree synced, so a resolver fault
   here is never read as the trees dropping those records.
+- **A failed run is reported on one status issue.** GitHub's own notification
+  for a scheduled run reaches only whoever last edited its schedule, so the
+  workflow also keeps a single issue labelled `pipeline-status`, rewrites it
+  after every scheduled run, and comments on it only when the state changes.
+  GitHub sends no notification for an edit, so subscribing to that issue is how
+  to hear of a failure and of the recovery. Do not close it or remove its label;
+  the workflow finds it by label and author, never by title.
 - **Only `all.*` trees are published.** No `snap.*` — no core-geth path points
   snap discovery at one on any network. No `les.*` — LES is being retired, and
   the publishers that still carry those trees publish zero nodes into them.

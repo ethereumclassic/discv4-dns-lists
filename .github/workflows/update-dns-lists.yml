@@ -20,6 +20,9 @@ on:
 
 permissions:
   contents: write
+  # For the one status issue this workflow keeps: it is rewritten every run and
+  # commented on when the state changes -- see scripts/report-status.sh.
+  issues: write
 
 concurrency:
   # Two crawls publishing to the same zone would race on the tree sequence
@@ -130,8 +133,12 @@ jobs:
             ethereumclassic.net=bc79166f3eca64edddeec1b6e0e4489d
             ethclassic.net=b1a010358b1dbc6af14b6e880af34df8
             ethereumclassic.network=41313b1ad8c6c958fc54086b89d106aa
+        # The output is kept for the status report. pipefail, because a step's
+        # default shell is `bash -e` without it, and `tee` would then turn a
+        # refused run into a passing one.
         run: |
-          ./scripts/update-lists.sh ${{ inputs.dry_run && '--dry-run' || '' }}
+          set -o pipefail
+          ./scripts/update-lists.sh ${{ inputs.dry_run && '--dry-run' || '' }} 2>&1 | tee "$RUNNER_TEMP/update-lists.log"
 
       - name: Remove signing key
         # Runs even if the step above failed, so a crash does not leave the key
@@ -176,3 +183,13 @@ jobs:
             -m "lists: refresh from $(date -u +%Y-%m-%d) crawl -- ${counts%% }" \
             -m "Published by ${{ github.workflow }} run ${{ github.run_id }}."
           git push
+
+      - name: Report status
+        # Every run except a manual dry run, and whether or not an earlier step
+        # failed: a refused or broken run is exactly what must not go unseen.
+        if: ${{ always() && !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ./scripts/report-status.sh "$JOB_STATUS" "$RUN_URL" "$RUNNER_TEMP/update-lists.log"
