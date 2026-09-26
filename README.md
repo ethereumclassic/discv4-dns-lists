@@ -233,9 +233,11 @@ secrets. Use it to see what a crawl would produce before letting one reach DNS.
 
 **A tree that will not sync locally is not necessarily dead.** `devp2p dns sync`
 resolves through the system resolver and has no option to use another one. It
-issues its lookups concurrently, and a stub resolver such as `systemd-resolved`
-at `127.0.0.53` drops them under that concurrency while the same tree resolves
-fine through a public resolver — a sync returning nothing, against `dig`
+fetches one record at a time, at most three a second, and gives each lookup five
+seconds with no retry, so a single slow answer fails the whole sync; `--timeout`
+lengthens that limit. A stub resolver such as `systemd-resolved` at `127.0.0.53`
+has been measured failing it outright while the same tree resolves fine through
+a public resolver — a sync returning nothing, against `dig`
 returning records normally, is the signature.
 
 `dig @1.1.1.1 TXT <tree-root>` confirms the tree is alive, but it cannot repair

@@ -103,9 +103,8 @@ correct direction — a client cannot tell a broken crawl from a quiet network.
 
 - **Pushing anything.** Public Ethereum Classic organization repository.
 - **Committing anything**, documentation included.
-- **Uncommenting the `schedule:` block.** It is off on purpose: until one
-  supervised run has published and committed a tree, the shrink check has no
-  baseline.
+- **Changing or disabling the nightly schedule.** It runs daily because the leaf
+  records carry a one-day TTL.
 - **Changing a cap, floor, the shrink tolerance, the retention threshold or a
   fork hash.**
 - **Adding a domain, DNS provider or publisher.** `devp2p` automates Cloudflare

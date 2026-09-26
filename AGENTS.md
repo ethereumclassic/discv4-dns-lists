@@ -67,9 +67,11 @@ python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' \
 
 ### Checking a published tree
 
-`devp2p dns sync` uses the system resolver. A stub resolver such as
-`systemd-resolved` at `127.0.0.53` times out under the query volume of a large
-tree while that same tree resolves fine through a public resolver. **Re-query a
+`devp2p dns sync` uses the system resolver, fetches one record at a time and
+gives each lookup five seconds with no retry, so one slow answer fails the whole
+sync (`--timeout` lengthens the limit). A stub resolver such as
+`systemd-resolved` at `127.0.0.53` fails it on a large tree while that same tree
+resolves fine through a public resolver. **Re-query a
 failed lookup with `dig @1.1.1.1` before concluding a tree is dead.** This has
 been misread as a network fault more than once.
 
@@ -204,10 +206,9 @@ Do not "fix" the disabled config into an active one. Its state is a decision.
   Classic organization and it becomes bootstrap infrastructure for a live
   network. Nothing leaves the machine without explicit confirmation.
 - **Any commit.** Including a commit that only touches documentation.
-- **Enabling the nightly schedule.** The `schedule:` block in the workflow is
-  commented out on purpose: until one supervised run has published and committed
-  a tree, the shrink check has no baseline and cannot fire. Uncommenting it
-  makes the *schedule*, not a supervised run, perform the first publish.
+- **Changing or disabling the nightly schedule.** It runs daily because the
+  leaf records carry a one-day TTL; the reasoning is on the `schedule:` block in
+  the workflow.
 - **Changing a cap, a floor, the shrink tolerance, the retention threshold or a
   fork hash.** See above.
 - **Adding a domain, a DNS provider or a publisher.**

@@ -188,10 +188,10 @@ log "seeded from $(tr ',' '\n' <<<"$BOOT_CLASSIC" | wc -l) classic and $(tr ',' 
 # because a seed sync that fails is skipped silently and one zone should not be
 # able to take the whole seed with it.
 #
-# The predecessor trees stay until this project runs its own bootnodes. They are
-# currently the only thing replenishing Mordor -- the crawl has contributed zero
-# Mordor nodes on every run measured -- so dropping them now would leave that
-# tree decaying with nothing to refill it.
+# The predecessor trees stay as a further source of reach. They were once the
+# only thing replenishing Mordor; since this project's own bootnodes shipped in
+# the client, the crawl finds Mordor nodes by itself as well. A tree that stops
+# resolving is skipped.
 SEED_KEY_OURS="enrtree://APDLRZ2T7ERXPWXX4D5USB32NIFYHXMFVZQ3DZALK6JJJ5L4VSYIQ@"
 SEED_KEY_PRIOR="enrtree://AJE62Q4DUX4QMMXEHCSSCSC65TDHZYSMONSD64P3WULVLSF6MRQ3K@"
 
