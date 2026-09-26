@@ -63,6 +63,30 @@ CAP_CLASSIC="${CAP_CLASSIC:-120}"
 CAP_MORDOR="${CAP_MORDOR:-15}"
 cap_for() { case "$1" in classic) echo "$CAP_CLASSIC";; mordor) echo "$CAP_MORDOR";; *) echo 100;; esac; }
 
+# The fork hash (EIP-2124 FORK_HASH) a synced node on each network advertises
+# today. A published tree keeps only nodes whose record carries it.
+#
+# `nodeset filter -eth-network` does not do this. It is core-geth's
+# forkid.NewStaticFilter, which judges compatibility from block zero, so every
+# stage of the network's fork schedule passes -- the genesis stage included. A
+# node that starts from an empty chain advertises the genesis stage until it
+# imports its first block: its record is refreshed only on a new chain head, and
+# a snap sync sets none until it finishes. Such a node answers every discovery
+# ping and serves no blocks.
+# Measured 2026-09-25, 73 of the 120 published classic nodes were on the genesis
+# stage, which Ethereum mainnet shares, so the record cannot even say which
+# chain such a node is on. The crawl held 139 classic nodes on this hash.
+#
+# Pinned, because nothing the pipeline runs can report a network's current fork
+# ID: devp2p has no command for it, and the crawl never sees a chain head. A pin
+# goes stale when the network passes its next fork, and a stale one would
+# publish only the nodes left behind, so keep_current_fork refuses as soon as
+# the crawl finds a node past it. Every stage's hash is listed in core-geth's
+# core/forkid/forkid_test.go.
+FORK_HASH_CLASSIC="${FORK_HASH_CLASSIC:-be46d57c}"   # since block 19,250,000 (Spiral)
+FORK_HASH_MORDOR="${FORK_HASH_MORDOR:-3a6b00d7}"     # since block 9,957,000
+fork_hash_for() { case "$1" in classic) echo "$FORK_HASH_CLASSIC";; mordor) echo "$FORK_HASH_MORDOR";; *) return 1;; esac; }
+
 # domain:publisher pairs.
 #
 # All three domains are on Cloudflare. This is not provider diversity: one
@@ -249,6 +273,93 @@ publish_desec() {
   "$DESEC_PUBLISHER" "$dir" "$txt" || fail "desec publish failed for $dir"
 }
 
+# Reduce a filtered node set, in place, to the nodes on the network's current
+# fork hash -- see FORK_HASH_CLASSIC -- and refuse if the pin has gone stale.
+#
+# A fork hash is a CRC32 over the genesis hash and every fork block passed, so a
+# node past the next fork F advertises crc32(F, pinned hash). F is read from the
+# nodes that announce it as their `next`: in this set, and in the last committed
+# tree, which still carries the announcement after the upgraded nodes have moved
+# past it. The input has already been through `-eth-network`, so a successor
+# counted here is on the schedule core-geth itself ships.
+keep_current_fork() {
+  local file="$1" net="$2" fork="$3" dir="$4"
+  python3 - "$file" "$net" "$fork" "$dir" <(git show "HEAD:$dir/nodes.json" 2>/dev/null) <<'PYEOF'
+import base64, collections, json, sys, zlib
+path, net, want, label, committed = sys.argv[1:6]
+want = want.lower()
+var = "FORK_HASH_" + net.upper()
+if len(want) != 8 or any(c not in "0123456789abcdef" for c in want):
+    sys.exit("  ERROR: %s: %s=%s is not a fork hash -- expected 8 hex digits" % (label, var, want))
+
+def item(b, i):
+    # One RLP item at b[i]: (payload start, payload end).
+    p = b[i]
+    if p < 0x80: return i, i + 1
+    if p < 0xb8: return i + 1, i + 1 + p - 0x80
+    if p < 0xc0:
+        s = i + 1 + p - 0xb7
+        return s, s + int.from_bytes(b[i + 1:s], "big")
+    if p < 0xf8: return i + 1, i + 1 + p - 0xc0
+    s = i + 1 + p - 0xf7
+    return s, s + int.from_bytes(b[i + 1:s], "big")
+
+def items(b, start, end):
+    out = []
+    while start < end:
+        s, e = item(b, start)
+        out.append((s, e))
+        start = e
+    if start != end:
+        raise ValueError("RLP list overruns its length")
+    return out
+
+def fork_id(nid, record):
+    # The ENR is [signature, seq, key, value, ...]; the `eth` value is
+    # [[fork hash, fork next], ...]. devp2p's own filter has already decoded
+    # every record here, so a failure is this decoder's fault and must stop the
+    # run rather than quietly drop the node.
+    try:
+        s = record[4:]
+        raw = base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+        top = items(raw, *item(raw, 0))
+        for k, v in zip(top[2::2], top[3::2]):
+            if raw[k[0]:k[1]] == b"eth":
+                fid = items(raw, *items(raw, *v)[0])
+                return raw[fid[0][0]:fid[0][1]].hex(), int.from_bytes(raw[fid[1][0]:fid[1][1]], "big")
+    except Exception as e:
+        sys.exit("  ERROR: %s: cannot decode the eth entry of node %s: %s" % (label, nid, e))
+    sys.exit("  ERROR: %s: node %s has no eth entry, which -eth-network requires" % (label, nid))
+
+nodes = json.load(open(path))
+ids = {nid: fork_id(nid, v["record"]) for nid, v in nodes.items()}
+try:
+    prev = json.load(open(committed))
+except ValueError:
+    prev = {}   # no committed tree yet
+prev_ids = [fork_id(nid, v["record"]) for nid, v in prev.items()]
+
+announced = {nxt for h, nxt in list(ids.values()) + prev_ids if h == want and nxt}
+successor = {"%08x" % zlib.crc32(f.to_bytes(8, "big"), int(want, 16)): f for f in announced}
+past = collections.Counter(h for h, _ in ids.values() if h in successor)
+if past:
+    h, n = past.most_common(1)[0]
+    sys.exit("  ERROR: %s: %d nodes advertise fork hash %s, the successor of %s=%s at block %d.\n"
+             "  The network has passed that fork, and the pinned stage now holds only the nodes\n"
+             "  left behind. Update %s to %s once that stage is confirmed canonical."
+             % (label, n, h, var, want, successor[h], var, h))
+
+kept = {nid: v for nid, v in nodes.items() if ids[nid][0] == want}
+left = collections.Counter(ids[nid] for nid in nodes if nid not in kept)
+print("  %s: %d of %d nodes on %s=%s; left out: %s" % (label, len(kept), len(nodes), var, want,
+      ", ".join("%s next %d x%d" % (h, nx, c) for (h, nx), c in left.most_common()) or "none"))
+if not kept:
+    sys.exit("  ERROR: %s: no node carries %s=%s -- check it against core-geth's fork ID tests"
+             % (label, var, want))
+json.dump(kept, open(path, "w"), indent=2)
+PYEOF
+}
+
 publish_tree() {
   local domain="$1" publisher="$2" src="$3" net="$4" min="$5" zone="$6"
   shift 6
@@ -256,6 +367,12 @@ publish_tree() {
   mkdir -p "$dir"
   "$DEVP2P" nodeset filter "$src" -eth-network "$net" "$@" > "$dir/nodes.raw.json" \
     || fail "filter failed for $domain"
+
+  # Before the cap, so the cap chooses among current nodes only -- see
+  # FORK_HASH_CLASSIC.
+  local fork; fork=$(fork_hash_for "$net") || fail "$domain: no current fork hash for network '$net'"
+  keep_current_fork "$dir/nodes.raw.json" "$net" "$fork" "$dir" \
+    || fail "$domain: current-fork check failed -- refusing to publish"
 
   # Cap the published set against the DNS zone budget -- see CAP_CLASSIC above.
   #

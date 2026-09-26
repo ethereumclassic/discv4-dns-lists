@@ -52,7 +52,9 @@ one operator has the same exposure whoever that operator is.
    itself ships, and **revalidates the seeded set** — every node is re-pinged, and
    what does not answer is dropped.
 3. **Filter.** `devp2p nodeset filter -eth-network classic|mordor` keeps nodes
-   whose fork ID matches.
+   whose fork ID is anywhere on that network's fork schedule. The script then
+   keeps only the nodes on its **current** fork ID — see
+   [below](#only-nodes-on-the-current-fork-id-are-published).
 4. **Cap** to the DNS zone budget, **sign** with the project key, **publish**,
    **commit** the result here.
 
@@ -80,6 +82,45 @@ Upstream go-ethereum's copy has no `classic` or `mordor` value for
 `-eth-network` and **rejects them** — measured, exit 1 with
 `-eth-network: unknown network "classic"`. A build from the wrong source
 therefore fails the run rather than quietly publishing an empty tree.
+
+## Only nodes on the current fork ID are published
+
+**`-eth-network` admits every stage of the fork schedule, not only the current
+one.** It is core-geth's `forkid.NewStaticFilter`, which judges
+[EIP-2124](https://eips.ethereum.org/EIPS/eip-2124) compatibility from block
+zero. From there every later stage looks like a node that is ahead, so any fork
+ID on the network's schedule passes and only one off it is rejected.
+
+**That admits nodes a new client cannot sync from.** A node that starts from an
+empty chain advertises the genesis stage in its record until it imports its first
+block, because the record is refreshed only on a new chain head and a snap sync
+sets none until it finishes. Such a node answers every discovery ping, so it
+ranks as fresh.
+Measured 2026-09-25:
+
+| classic | current `be46d57c` | genesis stage `fc64ec04` | before Spiral `7fd1bb25` |
+|---|---|---|---|
+| published tree, before this check | 46 | 73 | 1 |
+| crawl set, before the cap | 139 | 279 | 2 |
+
+A new node syncing Ethereum Classic mainnet that day dropped 8 distinct peers on
+sync timeouts, and all 8 were in the genesis-stage group. That stage is also the
+one Ethereum mainnet shares, so the record cannot say which chain such a node is
+on.
+
+**So the script keeps only nodes on `FORK_HASH_CLASSIC` or `FORK_HASH_MORDOR`**,
+the fork hash a node at the chain head advertises, and it does so before the cap,
+so the cap chooses among current nodes. Moving the filter's vantage point to the
+chain head would not be enough: EIP-2124 also accepts a node that is behind when
+its next fork matches, which is the genesis-stage case again.
+
+**The values are pinned, and a pin goes stale at the next fork.** Before a
+scheduled fork activates, nodes that announce it as their next fork and nodes
+that do not yet know of it carry the same hash, and both are kept. Once any node
+on the schedule advertises the hash that follows the pin, the script refuses to
+publish and names the new value. The last published tree stays in DNS until the
+pin is updated; the script never falls back to publishing the stage the network
+has left.
 
 ## How large a tree is, and why
 
