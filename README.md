@@ -11,15 +11,16 @@ developers and community contributors.
 
 > [!IMPORTANT]
 > **Move to the community-maintained trees.** Core-geth `v1.12.x` finds its first
-> peers through endpoints the ETC Cooperative maintained: DNS trees published from
-> [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists)
-> and, in its later releases, the Cooperative's bootnodes. The Cooperative entered
-> maintenance mode at the end of 2024, and its board has communicated that it will
-> dissolve by the end of 2026 and that those trees will be archived as it does.
-> The trees published here continue that service. Core-geth
-> [`v1.13.x`](https://github.com/ethereumclassic/core-geth/releases/latest), from
-> [`ethereumclassic/core-geth`](https://github.com/ethereumclassic/core-geth),
-> reads them by default, and a `v1.12.x` node can switch with
+> peers through the bootnodes built into it and the DNS trees published from
+> [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists),
+> which the ETC Cooperative maintained. The Cooperative entered maintenance mode at
+> the end of 2024. Its board has communicated that the Cooperative will dissolve
+> and that those trees will stop being updated when it does. From
+> then on they will serve an aging list of nodes until their domains lapse and
+> they stop resolving. The trees published here take their place. Core-Geth
+> [`v1.13.x`](https://github.com/ethereumclassic/core-geth/releases/latest), released
+> from [`ethereumclassic/core-geth`](https://github.com/ethereumclassic/core-geth),
+> reads them by default, and a `v1.12.x` node can switch to them with
 > [one flag](#quick-start).
 > [The ETC Cooperative transition](https://docs.coregeth.com/etc-cooperative-transition/)
 > lists where the Cooperative's other services continue.

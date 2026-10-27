@@ -4,24 +4,25 @@ A client with no peers cannot sync, and the nodes it starts from shape its first
 view of the chain. This repository publishes the lists core-geth starts from, in
 place of the ones the ETC Cooperative maintained.
 
-## The ETC Cooperative's discovery endpoints
+## The discovery endpoints v1.12.x starts from
 
 The ETC Cooperative entered maintenance mode at the end of 2024, and its board has
-communicated that it will dissolve by the end of 2026.
+communicated that it will dissolve.
 [The ETC Cooperative transition](https://docs.coregeth.com/etc-cooperative-transition/)
 lists where each of the services it maintained continues.
 
 Core-geth `v1.12.x` starts from one DNS tree per network, published from
 [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists),
 and from the bootnodes compiled into it. From `v1.12.20` to `v1.12.23` those are
-four bootnodes run by the ETC Cooperative, three for Ethereum Classic and one for
+the four Core-Geth `v1.12` bootnodes, three for Ethereum Classic and one for
 Mordor, all with the same hosting provider. An attack in March 2026 repeatedly
 crashed two of the three Classic bootnodes, as the
 [March 2026 security audit](https://docs.coregeth.com/audits/2026-03-security-audit/)
-records. The board has also communicated that the Cooperative's trees will be
-archived as it dissolves. Once those endpoints go offline, a node on those
-releases that is new, or has been stopped for a while, has nothing compiled in to
-start from.
+records. The board has also communicated that the `v1.12` trees will stop being
+updated as the ETC Cooperative dissolves. They will then serve an aging list of
+nodes until their domains lapse and they stop resolving. Once those endpoints
+are gone, a node on those releases that is new, or has been stopped for a while,
+has nothing compiled in to start from.
 
 ## What replaces them
 
