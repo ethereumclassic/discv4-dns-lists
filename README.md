@@ -10,7 +10,7 @@ public. They are maintained in the
 developers and community contributors.
 
 > [!IMPORTANT]
-> **Move to the community-maintained trees.** Core-geth `v1.12.x` finds its first
+> **Move to the community-maintained trees.** Core-Geth `v1.12.x` finds its first
 > peers through the bootnodes built into it and the DNS trees published from
 > [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists),
 > which the ETC Cooperative maintained. The Cooperative entered maintenance mode at
@@ -38,15 +38,15 @@ enrtree://APDLRZ2T7ERXPWXX4D5USB32NIFYHXMFVZQ3DZALK6JJJ5L4VSYIQ@all.mordor.ether
 
 `all.classic.` is Ethereum Classic and `all.mordor.` is its Mordor test network.
 All six are signed by one key, the text between `enrtree://` and `@`, and the
-same URLs are compiled into core-geth. Each directory in this repository holds
+same URLs are compiled into Core-Geth. Each directory in this repository holds
 one published tree and is named after the DNS name it serves.
 
 ## Quick start
 
-**Core-geth `v1.13.x`:** nothing to configure. Both networks read these trees by
+**Core-Geth `v1.13.x`:** nothing to configure. Both networks read these trees by
 default.
 
-**Core-geth `v1.12.x`:** add `--discovery.dns` with the three trees for your
+**Core-Geth `v1.12.x`:** add `--discovery.dns` with the three trees for your
 network.
 
 ```sh
@@ -59,7 +59,7 @@ geth --classic --discovery.dns "enrtree://APDLRZ2T7ERXPWXX4D5USB32NIFYHXMFVZQ3DZ
 
 | Page | What it covers |
 |---|---|
-| [Using the trees](docs/using-the-trees.md) | Pointing any core-geth release at these trees |
+| [Using the trees](docs/using-the-trees.md) | Pointing any Core-Geth release at these trees |
 | [Verifying a tree](docs/verifying-a-tree.md) | Checking what DNS serves against what this repository recorded |
 | [DNS hosting and outages](docs/dns-outage.md) | What a DNS outage affects, and starting a node without the trees |
 | [How nodes are chosen](docs/node-selection.md) | What gets a node listed, the current fork ID, and tree size |

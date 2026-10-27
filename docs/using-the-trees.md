@@ -1,7 +1,7 @@
 # Using the trees
 
 This page lists the six discovery trees this repository publishes and shows how
-to point a core-geth node at them.
+to point a Core-Geth node at them.
 
 ## The trees
 
@@ -18,20 +18,20 @@ enrtree://APDLRZ2T7ERXPWXX4D5USB32NIFYHXMFVZQ3DZALK6JJJ5L4VSYIQ@all.mordor.ether
 Each network's list is published under three domain names, and all six trees are
 signed by one key, the text between `enrtree://` and `@`.
 
-The same six URLs are compiled into core-geth, in
+The same six URLs are compiled into Core-Geth, in
 [`params/bootnodes_classic.go`](https://github.com/ethereumclassic/core-geth/blob/main/params/bootnodes_classic.go)
 and
 [`params/bootnodes_mordor.go`](https://github.com/ethereumclassic/core-geth/blob/main/params/bootnodes_mordor.go),
 and each tree's directory in this repository records the one it serves in its
 `enrtree-info.json`, so any copy of a URL can be checked against the others.
 
-## Core-geth v1.13.x
+## Core-Geth v1.13.x
 
 There is nothing to configure. Both networks read their three trees by default,
 in every sync mode. Releases are published at
 [`ethereumclassic/core-geth`](https://github.com/ethereumclassic/core-geth/releases/latest).
 
-## Core-geth v1.12.x
+## Core-Geth v1.12.x
 
 `--discovery.dns` points a node at other trees. Every `v1.12` release has it, and
 so does any build of that code. Add it to the node's command line:

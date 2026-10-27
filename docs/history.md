@@ -1,7 +1,7 @@
 # Why this repository exists
 
 A client with no peers cannot sync, and the nodes it starts from shape its first
-view of the chain. This repository publishes the lists core-geth starts from, in
+view of the chain. This repository publishes the lists Core-Geth starts from, in
 place of the ones the ETC Cooperative maintained.
 
 ## The discovery endpoints v1.12.x starts from
@@ -11,7 +11,7 @@ communicated that it will dissolve.
 [The ETC Cooperative transition](https://docs.coregeth.com/etc-cooperative-transition/)
 lists where each of the services it maintained continues.
 
-Core-geth `v1.12.x` starts from one DNS tree per network, published from
+Core-Geth `v1.12.x` starts from one DNS tree per network, published from
 [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists),
 and from the bootnodes compiled into it. From `v1.12.20` to `v1.12.23` those are
 the four Core-Geth `v1.12` bootnodes, three for Ethereum Classic and one for
@@ -31,7 +31,7 @@ has nothing compiled in to start from.
 
 ## What replaces them
 
-This repository and core-geth `v1.13.x` replace them from the community's
+This repository and Core-Geth `v1.13.x` replace them from the community's
 organization. The trees here are published under three domain names and rebuilt
 every night. The bootnodes `v1.13.x` ships are run by the Core-Geth maintainers
 and spread across hosting providers and countries. In `v1.13.0`, the three
@@ -54,7 +54,7 @@ it published.
 
 [`etclabscore/discv4-dns-lists`](https://github.com/etclabscore/discv4-dns-lists),
 in the ETC Cooperative's `etclabscore` organization, is the source of the
-`blockd.info` and `etcdisco.net` trees that core-geth `v1.12.x` reads, and it ran
+`blockd.info` and `etcdisco.net` trees that Core-Geth `v1.12.x` reads, and it ran
 in production for years. This repository was written separately rather than
 forked from it, and several things here come from reading it.
 

@@ -6,7 +6,7 @@ this repository recorded when the tree was published.
 
 ## Compare a tree with this repository
 
-`devp2p`, in core-geth's `alltools` archive, verifies each record as it downloads
+`devp2p`, in Core-Geth's `alltools` archive, verifies each record as it downloads
 it and writes out the list it verified. From a clone of this repository:
 
 ```bash

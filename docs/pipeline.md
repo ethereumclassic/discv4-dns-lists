@@ -12,7 +12,7 @@ things:
 
 1. **Seed** from published trees: this repository's own, and the predecessor's
    for as long as they resolve.
-2. **Crawl.** `devp2p discv4 crawl` walks the DHT from the bootnodes core-geth
+2. **Crawl.** `devp2p discv4 crawl` walks the DHT from the bootnodes Core-Geth
    ships, and **revalidates the seeded set**. Every node is re-pinged; one that
    stops answering is dropped after a few missed checks, and a seeded node that
    never answers is dropped once no seed tree carries it.
@@ -147,7 +147,7 @@ with `keystore.DecryptKey` and reads the password from stdin; a raw hex key fail
 with `error decrypting key`. That is why there are two secrets rather than one.
 
 **Its public half is compiled into clients** as the `enrtree://<pubkey>@<domain>`
-prefix in core-geth's `params/bootnodes_*.go`. Losing the private half means every
+prefix in Core-Geth's `params/bootnodes_*.go`. Losing the private half means every
 release carrying that prefix must be rebuilt to point at a new one. Treat it as a
 long-lived project key, not a CI credential.
 

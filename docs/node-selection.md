@@ -20,7 +20,7 @@ further peers through the discovery network itself.
 ## Only nodes on the current fork ID are published
 
 **`-eth-network` admits every stage of the fork schedule, not only the current
-one.** It is core-geth's `forkid.NewStaticFilter`, which judges
+one.** It is Core-Geth's `forkid.NewStaticFilter`, which judges
 [EIP-2124](https://eips.ethereum.org/EIPS/eip-2124) compatibility from block
 zero. From there, every later stage looks like a node that is ahead, so any fork
 ID on the network's schedule passes, and only one that is not on it is rejected.
@@ -83,7 +83,7 @@ improvement, and the marginal value of node 300 is close to zero. Mordor's cap o
 crawl finds, up to the cap, and each night's count is in that night's commit
 message.
 
-**No `snap.*` trees are published.** No core-geth path points snap discovery at
+**No `snap.*` trees are published.** No Core-Geth path points snap discovery at
 one on any network: `SnapDiscoveryURLs` is set equal to `EthDiscoveryURLs` at
 every assignment site, and `SetDNSDiscoveryDefaults` hardcodes protocol `all`.
 Publishing them would spend roughly 45% of the record budget on trees nothing

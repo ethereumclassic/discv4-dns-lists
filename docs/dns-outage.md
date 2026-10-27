@@ -27,7 +27,7 @@ The nodes remain reachable. Each tree is committed here exactly as it was
 published, so its node records are available from this repository whether or not
 DNS is answering. A node that is already running keeps its peers and goes on
 finding more through the discovery network, and the bootnodes compiled into
-core-geth `v1.13.x` do not use DNS at all.
+Core-Geth `v1.13.x` do not use DNS at all.
 
 A node that cannot find peers can start from the committed records instead. This
 takes the twenty Classic nodes that answered most recently and passes them to the
