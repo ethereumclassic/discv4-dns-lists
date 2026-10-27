@@ -24,6 +24,11 @@ nodes until their domains lapse and they stop resolving. Once those endpoints
 are gone, a node on those releases that is new, or has been stopped for a while,
 has nothing compiled in to start from.
 
+> [!IMPORTANT]
+> **A `v1.12.x` node can move to the community-maintained trees with one flag.**
+> [Using the trees](using-the-trees.md#core-geth-v112x) shows the
+> `--discovery.dns` flag for each network, and the same list in a config file.
+
 ## What replaces them
 
 This repository and core-geth `v1.13.x` replace them from the community's
